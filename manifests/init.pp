@@ -18,6 +18,18 @@ class postfix (
 
   if $enable_server { include 'postfix::server' }
 
+  if $facts['os']['name'] in ['RedHat','CentOS'] {
+    $_nologin = '/sbin/nologin'
+    $_postfix_libexec = '/usr/libexec/postfix'
+  }
+  elsif $facts['os']['name'] in ['Debian','Ubuntu'] {
+    $_nologin = '/usr/sbin/nologin'
+    $_postfix_libexec = '/usr/lib/postfix'
+  }
+  else {
+    fail("OS '${facts['os']['name']}' not supported by '${module_name}'")
+  }
+
   simp_file_line { '/root/.bashrc':
     path       => '/root/.bashrc',
     line       => 'alias mail="mutt"',
@@ -136,7 +148,7 @@ class postfix (
     '/etc/postfix/body_checks':;
   }
 
-  file { '/usr/libexec/postfix':
+  file { $_postfix_libexec:
     ensure  => 'present',
     recurse => true,
     owner   => 'root',
@@ -205,6 +217,25 @@ mailboxes `echo -n "+ "; find ~/Maildir -type d -name ".*" -printf "+\'%f\' "`
   package { 'postfix': ensure => $postfix_ensure }
   package { 'mutt': ensure => $mutt_ensure }
 
+  if $facts['os']['name'] in ['Debian','Ubuntu'] {
+    # Debian/Ubuntu install exim4 by default, make sure to remove it
+    package { 'exim4':
+      ensure => 'purged'
+    }
+    package { 'exim4-base':
+      ensure => 'purged'
+    }
+    package { 'exim4-config':
+      ensure => 'purged'
+    }
+    package { 'exim4-daemon-heavy':
+      ensure => 'purged'
+    }
+    package { 'exim4-daemon-light':
+      ensure => 'purged'
+    }
+  }
+
   service { 'postfix':
     ensure     => 'running',
     enable     => true,
@@ -219,7 +250,7 @@ mailboxes `echo -n "+ "; find ~/Maildir -type d -name ".*" -printf "+\'%f\' "`
     gid        => '89',
     home       => '/var/spool/postfix',
     membership => 'inclusive',
-    shell      => '/sbin/nologin',
+    shell      => $_nologin,
     require    => Package['postfix']
   }
 }
